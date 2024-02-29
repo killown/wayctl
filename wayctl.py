@@ -16,56 +16,71 @@ import time
 
 class Wayctl:
     def __init__(self):
+        # Create an ArgumentParser object to handle command-line arguments
         self.parser = argparse.ArgumentParser(
-            description="wayctl script utility for controlling some parts of the wayfire compositor through CLI or a script."
+            description="wayctl script utility for controlling parts of the wayfire compositor through the command line interface or a script."
         )
+
+        # Add command-line arguments for various actions
+
+        # --view option: Get information about views
         self.parser.add_argument(
             "--view",
             nargs="*",
-            help="get info about views",
+            help="Retrieve information about views. Usage: --view focused (to get information about the focused view), --view list (to list all views).",
         )
 
+        # --workspace option: Set the focused view to another workspace
         self.parser.add_argument(
             "--workspace",
             nargs="*",
-            help="set the focused view to another workspace",
+            help="Set the focused view to another workspace. Usage: --workspace set view focused <x-coordinate> <y-coordinate> (to set the focused view to the specified workspace coordinates).",
         )
 
+        # --dpms option: Set DPMS (Display Power Management Signaling) on/off/toggle
         self.parser.add_argument(
             "--dpms",
             nargs="*",
-            help="set dpms on/off/toggle",
+            help="Set DPMS (Display Power Management Signaling) state. Usage: --dpms on/off/toggle <monitor-name> (to turn DPMS on, off, or toggle its state for the specified monitor).",
         )
 
+        # --output option: Get output (monitor) info
         self.parser.add_argument(
             "--output",
             nargs="*",
-            help="get output info",
+            help="Retrieve information about outputs (monitors). Usage: --output view list (to view a list of all outputs), --output focused (to get information about the focused output).",
         )
 
+        # --screenshot option: Capture screenshots with various options
         self.parser.add_argument(
             "--screenshot",
             nargs="*",
-            help="options: (output, focused, slurp), output: screenshot the whole monitor, focused: screenshot the view, slurp: select a region to screenshot",
+            help="Capture screenshots with various options. Usage: --screenshot focused view (to capture a screenshot of the focused view), --screenshot slurp (to select a region to screenshot), --screenshot output all (to capture screenshots of all outputs).",
         )
 
+        # --session option: Print session-related information
         self.parser.add_argument(
             "--session",
             nargs="*",
-            help="print session",
+            help="Print session-related information. Usage: --session save (to save views session), --session start (to start a Wayfire session).",
         )
 
+        # --resize option: Resize views
         self.parser.add_argument(
             "--resize",
             nargs="*",
-            help="resize views",
+            help="Resize views. Usage: --resize views left/right/up/down (to resize views in the specified direction).",
         )
 
+        # --switch option: Switch views side
         self.parser.add_argument(
             "--switch",
             nargs="*",
-            help="switch views side",
+            help="Switch views side. Usage: --switch views (to switch views side).",
         )
+
+        # Parse the command-line arguments
+        self.args = self.parser.parse_args()
 
         self.args = self.parser.parse_args()
 
