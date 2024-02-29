@@ -339,8 +339,12 @@ if __name__ == "__main__":
         if "slurp" in wayctl.args.screenshot[0]:
             if len(wayctl.args.screenshot) == 1:
                 wayctl.screenshot_slurp()
-            if "focused" in wayctl.args.screenshot[0]:
-                if "view" in wayctl.args.screenshot[1]:
+            if "focused" in wayctl.args.screenshot[1]:
+                if "view" in wayctl.args.screenshot[2]:
+                    # this method is for gaming, in case you want slurp a game
+                    # will take screenshot of the whole game view, open the screenshot
+                    # and start slurp, after you select the area, it will give the final screenshot
+                    # you can't slurp while gaming right, because the game has the mouse focus
                     wayctl.screenshot_slurp_focused_view()
 
         if "focused" in wayctl.args.screenshot[0]:
