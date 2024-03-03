@@ -10,7 +10,6 @@ import shutil
 from subprocess import call, check_output, Popen
 from PIL import Image, ImageFont
 import psutil
-import threading
 import time
 
 
@@ -35,6 +34,12 @@ class Wayctl:
             "--workspace",
             nargs="*",
             help="Set the focused view to another workspace. Usage: --workspace set view focused <x-coordinate> <y-coordinate> (to set the focused view to the specified workspace coordinates).",
+        )
+
+        self.parser.add_argument(
+            "--move_cursor",
+            nargs="*",
+            help="move mouse cursor position with <x-coordinate> <y-coordinate>",
         )
 
         # --dpms option: Set DPMS (Display Power Management Signaling) on/off/toggle
@@ -93,6 +98,9 @@ class Wayctl:
         view_str = json.dumps(view, indent=4)
         print(view_str)
         print("\n\n")
+
+    def move_cursor(self, x, y):
+        self.sock.move_cursor(x, y)
 
     def create_new_session_file(self, file_path):
         try:
@@ -280,6 +288,10 @@ class Wayctl:
         self.sock.switch_views_side()
 
     def dpms(self):
+        if "off_all" in self.args.dpms:
+            self.sock.dpms("off")
+        if "on_all" in self.args.dpms:
+            self.sock.dpms("on")
         if "on" in self.args.dpms:
             monitor_name = self.args.dpms[-1].strip()
             self.sock.dpms("on", monitor_name)
@@ -391,10 +403,16 @@ if __name__ == "__main__":
         if "views" in wayctl.args.switch[0]:
             wayctl.switch_views_side()
 
+    if wayctl.args.move_cursor is not None:
+        x = wayctl.args.move_cursor[0]
+        y = wayctl.args.move_cursor[1]
+        wayctl.move_cursor(int(x), int(y))
+
     if wayctl.args.output is not None:
-        if "view list" in wayctl.args.output[0]:
-            output = wayctl.sock.focused_output_views()
-            pprint.pprint(output)
+        if "list" in wayctl.args.output[0]:
+            if "views" in wayctl.args.output[1]:
+                output = wayctl.sock.focused_output_views()
+                pprint.pprint(output)
 
         if "focused" in wayctl.args.output[0]:
             output = wayctl.sock.get_focused_output()
