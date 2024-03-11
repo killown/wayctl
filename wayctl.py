@@ -84,6 +84,13 @@ class Wayctl:
             help="Switch views side. Usage: --switch views (to switch views side).",
         )
 
+        # --plugin option: manager plugins
+        self.parser.add_argument(
+            "--plugin",
+            nargs="*",
+            help="add, reload and load plugins",
+        )
+
         # Parse the command-line arguments
         self.args = self.parser.parse_args()
 
@@ -326,6 +333,9 @@ class Wayctl:
             print(view)
             print("\n\n")
 
+    def _reload_plugin(self, plugin_name):
+        self.sock.reload_plugin(plugin_name)
+
 
 # the cyclomatic complexity became to high, need a better way to deal with
 if __name__ == "__main__":
@@ -407,6 +417,11 @@ if __name__ == "__main__":
         x = wayctl.args.move_cursor[0]
         y = wayctl.args.move_cursor[1]
         wayctl.move_cursor(int(x), int(y))
+
+    if wayctl.args.plugin is not None:
+        if "reload" in wayctl.args.plugin:
+            if wayctl.args.plugin[1] != "all":
+                wayctl._reload_plugin(wayctl.args.plugin[1])
 
     if wayctl.args.output is not None:
         if "list" in wayctl.args.output[0]:
