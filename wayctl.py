@@ -67,7 +67,7 @@ class Wayctl:
         )
 
         self.parser.add_argument(
-            "colorpicker",
+            "--colorpicker",
             nargs="*",
             help="Color picker using slurp and grim",
         )
@@ -280,8 +280,10 @@ class Wayctl:
         p = s.check_output(["slurp"]).decode().strip()
         screenshot_data = s.check_output(["grim", "-g", p, "-t", "ppm", "-"])
         screenshot = I.open(io.BytesIO(screenshot_data))
+        screenshot = screenshot.convert("RGB")
         pixel = screenshot.getpixel((screenshot.size[0] // 2, screenshot.size[1] // 2))
         color_code = "#{0:02X}{1:02X}{2:02X}".format(*pixel)
+        Popen(["wl-copy", color_code])
         return color_code
 
     def screenshot_view_id(self, view_id, filename):
@@ -384,7 +386,7 @@ if __name__ == "__main__":
 
     if wayctl.args.colorpicker is not None:
         color_code = wayctl.capture_screen_pixel()
-        print("Color code:", color_code)
+        print(color_code)
 
     if wayctl.args.screenshot is not None:
         if "focused" in wayctl.args.screenshot[0]:
