@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import wayfire as ws
+import wayfire.ipc as ws
 import os
 import sys
 import pprint
@@ -11,6 +11,9 @@ from subprocess import call, check_output, Popen
 from PIL import Image, ImageFont
 import psutil
 import time
+import subprocess as s
+import io
+import PIL.Image as I
 
 
 class Wayctl:
@@ -61,6 +64,12 @@ class Wayctl:
             "--screenshot",
             nargs="*",
             help="Capture screenshots with various options. Usage: --screenshot focused view (to capture a screenshot of the focused view), --screenshot slurp (to select a region to screenshot), --screenshot output all (to capture screenshots of all outputs).",
+        )
+
+        self.parser.add_argument(
+            "colorpicker",
+            nargs="*",
+            help="Color picker using slurp and grim",
         )
 
         # --session option: Print session-related information
@@ -213,6 +222,10 @@ class Wayctl:
         view_id = focused["id"]
         app_id = focused["app-id"]
         filename = f"/tmp/{app_id}-{view_id}.png"
+
+        if os.path.exists(filename):
+            os.remove(filename)
+
         self.screenshot_view_id(view_id, filename)
         self.sock.run(f"xdg-open {filename}")
 
@@ -228,6 +241,8 @@ class Wayctl:
         view_id = focused["id"]
         app_id = focused["app-id"]
         filename = f"/tmp/{app_id}-{view_id}.png"
+        if os.path.exists(filename):
+            os.remove(filename)
         cmd = ["grim", "-g", f"{slurp}", filename]
         # must use call because Popen will not hang while creating the file thus xdg-open may fail
         call(cmd)
@@ -242,6 +257,8 @@ class Wayctl:
         view_id = focused["id"]
         app_id = focused["app-id"]
         filename = f"/tmp/{app_id}-{view_id}.png"
+        if os.path.exists(filename):
+            os.remove(filename)
         cmd = ["grim", "-g", f"{slurp}", filename]
         call(cmd)
         Popen(["xdg-open", filename])
@@ -258,6 +275,14 @@ class Wayctl:
         img = Image.new("RGBA", size)
         img.im.paste(color, (20, 20) + size, mask_image)
         img.save(filename)
+
+    def capture_screen_pixel(self):
+        p = s.check_output(["slurp"]).decode().strip()
+        screenshot_data = s.check_output(["grim", "-g", p, "-t", "ppm", "-"])
+        screenshot = I.open(io.BytesIO(screenshot_data))
+        pixel = screenshot.getpixel((screenshot.size[0] // 2, screenshot.size[1] // 2))
+        color_code = "#{0:02X}{1:02X}{2:02X}".format(*pixel)
+        return color_code
 
     def screenshot_view_id(self, view_id, filename):
         self.sock.screenshot(view_id, filename)
@@ -303,8 +328,12 @@ class Wayctl:
             monitor_name = self.args.dpms[-1].strip()
             self.sock.dpms("on", monitor_name)
         if "off" in self.args.dpms:
-            monitor_name = self.args.dpms[-1].strip()
-            self.sock.dpms("off", monitor_name)
+            monitor_name = self.args.dpms[1].strip()
+            if "timeout" in self.args.dpms:
+                timeout = int(self.args.dpms[3].strip())
+                print(timeout)
+                time.sleep(int(timeout))
+                self.sock.dpms("off", monitor_name)
         if "toggle" in self.args.dpms:
             monitor_name = self.args.dpms[-1].strip()
             focused_output = self.sock.get_focused_output()
@@ -352,6 +381,10 @@ if __name__ == "__main__":
 
     if wayctl.args.dpms is not None:
         wayctl.dpms()
+
+    if wayctl.args.colorpicker is not None:
+        color_code = wayctl.capture_screen_pixel()
+        print("Color code:", color_code)
 
     if wayctl.args.screenshot is not None:
         if "focused" in wayctl.args.screenshot[0]:
