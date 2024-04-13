@@ -330,12 +330,13 @@ class Wayctl:
             monitor_name = self.args.dpms[-1].strip()
             self.sock.dpms("on", monitor_name)
         if "off" in self.args.dpms:
-            monitor_name = self.args.dpms[1].strip()
             if "timeout" in self.args.dpms:
+                monitor_name = self.args.dpms[1].strip()
                 timeout = int(self.args.dpms[3].strip())
-                print(timeout)
                 time.sleep(int(timeout))
                 self.sock.dpms("off", monitor_name)
+            else:
+                self.sock.dpms("off")
         if "toggle" in self.args.dpms:
             monitor_name = self.args.dpms[-1].strip()
             focused_output = self.sock.get_focused_output()
