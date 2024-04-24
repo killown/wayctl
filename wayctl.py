@@ -368,6 +368,12 @@ class Wayctl:
     def _reload_plugin(self, plugin_name):
         self.sock.reload_plugin(plugin_name)
 
+    def enable_plugin(self, plugin_name):
+        self.sock.enable_plugin(plugin_name)
+
+    def disable_plugin(self, plugin_name):
+        self.sock.disable_plugin(plugin_name)
+
 
 # the cyclomatic complexity became to high, need a better way to deal with
 if __name__ == "__main__":
@@ -458,6 +464,10 @@ if __name__ == "__main__":
         if "reload" in wayctl.args.plugin:
             if wayctl.args.plugin[1] != "all":
                 wayctl._reload_plugin(wayctl.args.plugin[1])
+        if "enable" in wayctl.args.plugin:
+            wayctl.enable_plugin(wayctl.args.plugin[1])
+        if "disable" in wayctl.args.plugin:
+            wayctl.disable_plugin(wayctl.args.plugin[1])
 
     if wayctl.args.output is not None:
         if "list" in wayctl.args.output[0]:
