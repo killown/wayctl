@@ -366,7 +366,14 @@ class Wayctl:
             print("\n\n")
 
     def list_plugins(self):
-        print(self.sock.list_plugins())
+        plugins = self.sock.list_plugins()
+        for plugin in plugins:
+            print(plugin)
+            print(plugins[plugin])
+            print("\n")
+
+        print("Enabled Plugins ")
+        print(self.sock.list_enabled_plugins())
 
     def _reload_plugin(self, plugin_name):
         self.sock.reload_plugin(plugin_name)
