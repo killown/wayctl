@@ -365,6 +365,9 @@ class Wayctl:
             print(view)
             print("\n\n")
 
+    def list_plugins(self):
+        print(self.sock.list_plugins())
+
     def _reload_plugin(self, plugin_name):
         self.sock.reload_plugin(plugin_name)
 
@@ -468,6 +471,8 @@ if __name__ == "__main__":
             wayctl.enable_plugin(wayctl.args.plugin[1])
         if "disable" in wayctl.args.plugin:
             wayctl.disable_plugin(wayctl.args.plugin[1])
+        if "list" in wayctl.args.plugin:
+            wayctl.list_plugins()
 
     if wayctl.args.output is not None:
         if "list" in wayctl.args.output[0]:
