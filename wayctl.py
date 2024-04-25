@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-import wayfire.ipc as ws
+from wayfire.ipc import sock
 import os
 import sys
 import pprint
@@ -14,10 +14,14 @@ import time
 import subprocess as s
 import io
 import PIL.Image as I
+from wayfire.core.ipc_utils import WayfireUtils
+from wayfire.extra.features import ExtraFeatures
 
 
 class Wayctl:
     def __init__(self):
+        self.ws_utils = WayfireUtils()
+        self.wayfire_extra = ExtraFeatures()
         # Create an ArgumentParser object to handle command-line arguments
         self.parser = argparse.ArgumentParser(
             description="wayctl script utility for controlling parts of the wayfire compositor through the command line interface or a script."
@@ -105,8 +109,7 @@ class Wayctl:
 
         self.args = self.parser.parse_args()
 
-        self.addr = os.getenv("WAYFIRE_SOCKET")
-        self.sock = ws.WayfireSocket(self.addr)
+        self.sock = sock
 
     def view_focused(self):
         view = self.sock.get_focused_view()
@@ -137,7 +140,7 @@ class Wayctl:
             return None
 
     def add_cmdline(self, view, process):
-        ws_views = self.sock.get_workspaces_with_views()
+        ws_views = self.ws_utils.get_workspaces_with_views()
         for view in self.sock.list_views():
             if process.pid == view["pid"]:
                 view["cmdline"] = process.cmdline()
@@ -179,7 +182,7 @@ class Wayctl:
         return result
 
     def start_app(self, cmdline):
-        return self.sock.run(" ".join(cmdline))["pid"]
+        return self.sock.run_cmd(" ".join(cmdline))["pid"]
 
     def start_wayfire_session(self):
         views = self.load_wayfire_session()
@@ -203,9 +206,9 @@ class Wayctl:
             if not view_id:
                 continue
 
-            self.sock.maximize(view_id)
+            self.ws_utils.maximize(view_id)
             self.sock.set_workspace(workspace, view_id)
-            self.sock.maximize(view_id)
+            self.ws_utils.maximize(view_id)
 
     def screenshot_geometry(self):
         output = self.sock.get_focused_output()
@@ -227,10 +230,10 @@ class Wayctl:
             os.remove(filename)
 
         self.screenshot_view_id(view_id, filename)
-        self.sock.run(f"xdg-open {filename}")
+        self.sock.run_cmd(f"xdg-open {filename}")
 
     def screenshot_focused_output(self):
-        self.sock.screenshot_focused_monitor()
+        self.wayfire_extra.screenshot_focused_monitor()
 
     def run_slurp(self):
         return check_output(["slurp"]).decode().strip()
@@ -251,7 +254,6 @@ class Wayctl:
     def screenshot_slurp_focused_view(self):
         self.screenshot_view_focused()
         time.sleep(1)
-        self.sock.fullscreen_focused()
         slurp = self.run_slurp()
         focused = self.sock.get_focused_view()
         view_id = focused["id"]
@@ -287,10 +289,10 @@ class Wayctl:
         return color_code
 
     def screenshot_view_id(self, view_id, filename):
-        self.sock.screenshot(view_id, filename)
+        self.wayfire_extra.screenshot(view_id, filename)
 
     def screenshot_all_outputs(self):
-        self.sock.screenshot_all_outputs()
+        self.wayfire_extra.screenshot_all_outputs()
 
     def create_directory(self, directory):
         if os.path.exists(directory):
@@ -303,45 +305,30 @@ class Wayctl:
             view_id = view["id"]
             filename = str(view_id) + ".png"
             filename = os.path.join("/tmp/screenshots", filename)
-            self.sock.screenshot(view_id, filename)
+            self.wayfire_extra.screenshot(view_id, filename)
         Popen("xdg-open /tmp/screenshots".split())
-
-    def resize_views_left(self):
-        self.sock.resize_views_left()
-
-    def resize_views_right(self):
-        self.sock.resize_views_right()
-
-    def resize_views_up(self):
-        self.sock.resize_views_up()
-
-    def resize_views_down(self):
-        self.sock.resize_views_down()
-
-    def switch_views_side(self):
-        self.sock.switch_views_side()
 
     def dpms(self):
         if "off_all" in self.args.dpms:
-            self.sock.dpms("off")
+            self.ws_utils.dpms("off")
         if "on_all" in self.args.dpms:
-            self.sock.dpms("on")
+            self.ws_utils.dpms("on")
         if "on" in self.args.dpms:
             monitor_name = self.args.dpms[-1].strip()
-            self.sock.dpms("on", monitor_name)
+            self.ws_utils.dpms("on", monitor_name)
         if "off" in self.args.dpms:
             if "timeout" in self.args.dpms:
                 monitor_name = self.args.dpms[1].strip()
                 timeout = int(self.args.dpms[3].strip())
                 time.sleep(int(timeout))
-                self.sock.dpms("off", monitor_name)
+                self.ws_utils.dpms("off", monitor_name)
             else:
-                self.sock.dpms("off")
+                self.ws_utils.dpms("off")
         if "toggle" in self.args.dpms:
             monitor_name = self.args.dpms[-1].strip()
             focused_output = self.sock.get_focused_output()
             monitor_name = focused_output["name"]
-            self.sock.dpms("toggle", monitor_name)
+            self.ws_utils.dpms("toggle", monitor_name)
 
     def view_list(self):
         views = self.sock.list_views()
@@ -366,23 +353,23 @@ class Wayctl:
             print("\n\n")
 
     def list_plugins(self):
-        plugins = self.sock.list_plugins()
+        plugins = self.wayfire_extra.list_plugins()
         for plugin in plugins:
             print(plugin)
             print(plugins[plugin])
             print("\n")
 
         print("Enabled Plugins ")
-        print(self.sock.list_enabled_plugins())
+        print(self.wayfire_extra.list_enabled_plugins())
 
     def _reload_plugin(self, plugin_name):
-        self.sock.reload_plugin(plugin_name)
+        self.wayfire_extra.reload_plugin(plugin_name)
 
     def enable_plugin(self, plugin_name):
-        self.sock.enable_plugin(plugin_name)
+        self.wayfire_extra.enable_plugin(plugin_name)
 
     def disable_plugin(self, plugin_name):
-        self.sock.disable_plugin(plugin_name)
+        self.wayfire_extra.disable_plugin(plugin_name)
 
 
 # the cyclomatic complexity became to high, need a better way to deal with
@@ -449,17 +436,6 @@ if __name__ == "__main__":
 
         if "start" in wayctl.args.session[0]:
             wayctl.start_wayfire_session()
-
-    if wayctl.args.resize is not None:
-        if "views" in wayctl.args.resize[0]:
-            if "left" in wayctl.args.resize[1]:
-                wayctl.resize_views_left()
-            if "right" in wayctl.args.resize[1]:
-                wayctl.resize_views_right()
-            if "up" in wayctl.args.resize[1]:
-                wayctl.resize_views_up()
-            if "down" in wayctl.args.resize[1]:
-                wayctl.resize_views_down()
 
     if wayctl.args.switch is not None:
         if "views" in wayctl.args.switch[0]:
