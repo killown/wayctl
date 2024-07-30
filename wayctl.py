@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-from wayfire.ipc import sock
 import os
+from subprocess import Popen
 import sys
 import pprint
 import json
@@ -13,15 +13,75 @@ import psutil
 import time
 import subprocess as s
 import io
+import dbus
 import PIL.Image as I
-from wayfire.core.ipc_utils import WayfireUtils
-from wayfire.extra.features import ExtraFeatures
+from wayfire.ipc import *
+from wayfire.extra.ipc_utils import WayfireUtils
+from wayfire.extra.stipc import Stipc
+addr = os.getenv('WAYFIRE_SOCKET')
+sock = WayfireSocket(addr)
+stipc = Stipc(sock)
 
+class ViewDropDown:
+    def __init__(self, term) -> None:
+        pass
+
+        self.TERMINAL_CMD = term
+        self.TERMINAL_WIDTH = 1000
+        self.TERMINAL_HEIGHT = 600
+        self.VIEW_STICKY = True # show the terminal in all workspaces, set False to disable
+        self.VIEW_ALWAYS_ON_TOP = True # always on top even if another view get the focus, Set False to disable
+
+        addr = os.getenv('WAYFIRE_SOCKET')
+        self.sock = WayfireSocket(addr)
+
+    def find_view(self):
+        hidden_view = shown_view = None
+        for v in sock.list_views():
+            if v['app-id'].lower() == self.TERMINAL_CMD:
+                if v['minimized']:
+                    hidden_view = v
+                else:
+                    shown_view = v
+        return hidden_view, shown_view
+
+    def configure_view(self, view, output):
+        if self.TERMINAL_WIDTH == 0 or self.TERMINAL_HEIGHT == 0:
+            return
+        wa = output['workarea']
+        geom = view['geometry']
+        x = wa['x'] + wa['width'] // 2 - geom['width'] // 2
+        y = wa['y'] + wa['height'] // 2 - geom['height'] // 2
+        sock.configure_view(view["id"], x, y, self.TERMINAL_WIDTH, self.TERMINAL_HEIGHT)
+        sock.set_view_sticky(view["id"], self.VIEW_STICKY)
+        sock.set_view_always_on_top(view["id"], self.VIEW_ALWAYS_ON_TOP)
+
+    def show_view(self, hidden_view):
+        sock.set_view_minimized(hidden_view['id'], False)
+        self.configure_view(hidden_view, sock.get_focused_output())
+
+    def hide_view(self, shown_view):
+        sock.set_view_minimized(shown_view['id'], True)
+
+
+    def run(self):
+        hidden_view, shown_view = self.find_view()
+        if not shown_view and not hidden_view:
+            Popen(self.TERMINAL_CMD, start_new_session=True)
+            time.sleep(1)
+            hidden_view, shown_view = self.find_view()
+            if shown_view:
+                self.show_view(shown_view)
+            else:
+                print("Failed to start new terminal!")
+        elif shown_view:
+            self.hide_view(shown_view)
+        else:
+            self.show_view(hidden_view)
 
 class Wayctl:
     def __init__(self):
-        self.ws_utils = WayfireUtils()
-        self.wayfire_extra = ExtraFeatures()
+        self.ws_utils = WayfireUtils(sock)
         # Create an ArgumentParser object to handle command-line arguments
         self.parser = argparse.ArgumentParser(
             description="wayctl script utility for controlling parts of the wayfire compositor through the command line interface or a script."
@@ -104,12 +164,51 @@ class Wayctl:
             help="add, reload and load plugins",
         )
 
+        self.parser.add_argument(
+            "--drop",
+            nargs="*",
+            help="start a view in guake mode",
+        )
+
         # Parse the command-line arguments
         self.args = self.parser.parse_args()
 
         self.args = self.parser.parse_args()
 
         self.sock = sock
+
+
+    def xdg_open(self, path):
+        call("xdg-open {0}".format(path).split())
+    
+    def screenshot_all_outputs(self):
+        bus = dbus.SessionBus()
+        desktop = bus.get_object(
+            "org.freedesktop.portal.Desktop", "/org/freedesktop/portal/desktop"
+        )
+        desktop.Screenshot(
+            "Screenshot",
+            {"handle_token": "my_token"},
+            dbus_interface="org.freedesktop.portal.Screenshot",
+        )
+        # lets wait save the file before try opening it
+        time.sleep(1)
+        self.xdg_open("/tmp/out.png")
+
+    def screenshot_focused_monitor(self):
+        output = sock.get_focused_output()
+        name = output["name"]
+        output_file = "/tmp/output-{0}.png".format(name)
+        call(["grim", "-o", name, output_file])
+        self.xdg_open(output_file)
+
+    def screenshot(self, id, filename):
+        capture = get_msg_template("view-shot/capture")
+        if capture is None:
+            return
+        capture["data"]["view-id"] = id
+        capture["data"]["file"] = filename
+        sock.send_json(capture)
 
     def view_focused(self):
         view = self.sock.get_focused_view()
@@ -182,7 +281,7 @@ class Wayctl:
         return result
 
     def start_app(self, cmdline):
-        return self.sock.run_cmd(" ".join(cmdline))["pid"]
+        return stipc.run_cmd(" ".join(cmdline))["pid"]
 
     def start_wayfire_session(self):
         views = self.load_wayfire_session()
@@ -230,10 +329,10 @@ class Wayctl:
             os.remove(filename)
 
         self.screenshot_view_id(view_id, filename)
-        self.sock.run_cmd(f"xdg-open {filename}")
+        stipc.run_cmd(f"xdg-open {filename}")
 
     def screenshot_focused_output(self):
-        self.wayfire_extra.screenshot_focused_monitor()
+        self.screenshot_focused_monitor()
 
     def run_slurp(self):
         return check_output(["slurp"]).decode().strip()
@@ -289,10 +388,7 @@ class Wayctl:
         return color_code
 
     def screenshot_view_id(self, view_id, filename):
-        self.wayfire_extra.screenshot(view_id, filename)
-
-    def screenshot_all_outputs(self):
-        self.wayfire_extra.screenshot_all_outputs()
+        self.screenshot(view_id, filename)
 
     def create_directory(self, directory):
         if os.path.exists(directory):
@@ -305,7 +401,7 @@ class Wayctl:
             view_id = view["id"]
             filename = str(view_id) + ".png"
             filename = os.path.join("/tmp/screenshots", filename)
-            self.wayfire_extra.screenshot(view_id, filename)
+            self.screenshot(view_id, filename)
         Popen("xdg-open /tmp/screenshots".split())
 
     def dpms(self):
@@ -353,23 +449,23 @@ class Wayctl:
             print("\n\n")
 
     def list_plugins(self):
-        plugins = self.wayfire_extra.list_plugins()
+        plugins = self.list_plugins()
         for plugin in plugins:
             print(plugin)
             print(plugins[plugin])
             print("\n")
 
         print("Enabled Plugins ")
-        print(self.wayfire_extra.list_enabled_plugins())
+        print(self.list_enabled_plugins())
 
     def _reload_plugin(self, plugin_name):
-        self.wayfire_extra.reload_plugin(plugin_name)
+        self.reload_plugin(plugin_name)
 
     def enable_plugin(self, plugin_name):
-        self.wayfire_extra.enable_plugin(plugin_name)
+        self.enable_plugin(plugin_name)
 
     def disable_plugin(self, plugin_name):
-        self.wayfire_extra.disable_plugin(plugin_name)
+        self.disable_plugin(plugin_name)
 
 
 # the cyclomatic complexity became to high, need a better way to deal with
@@ -457,10 +553,15 @@ if __name__ == "__main__":
         if "list" in wayctl.args.plugin:
             wayctl.list_plugins()
 
+    if wayctl.args.drop is not None:
+        cmd = wayctl.args.drop[0]
+        drop = ViewDropDown(cmd)
+        drop.run()
+
     if wayctl.args.output is not None:
         if "list" in wayctl.args.output[0]:
             if "views" in wayctl.args.output[1]:
-                output = wayctl.sock.focused_output_views()
+                output = utils.focused_output_views()
                 pprint.pprint(output)
 
         if "focused" in wayctl.args.output[0]:
